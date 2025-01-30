@@ -1,5 +1,6 @@
 import socket
 import threading
+import os 
 
 PORTA = 5050
 FORMATO = 'utf-8'
@@ -11,7 +12,7 @@ def receber_mensagens(cliente):
         try:
             mensagem = cliente.recv(1024).decode(FORMATO)
             if not mensagem:
-                break
+                os._exit(0) # então finalizo o processso (somente) desse cliente
             print(mensagem)
         except:
             print("[ERRO] Conexão perdida.")
