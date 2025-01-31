@@ -43,152 +43,152 @@ class Server:
                 print(f"[ERRO] Não foi possível enviar para {destinatario}")
                 self.clientes.pop(destinatario, None)
 
-    def listar(self, conexao, nome):
+    def listarusuarios(self, conexao, nome):
         lista_usuarios = "Usuários conectados: " + ", ".join(self.clientes.keys())
-        conexao.socket.send(lista_usuarios.encode(FORMATO))
-        print(f"[SERVIDOR] Lista enviada para {nome}: {lista_usuarios}")
-
-    def sair(self, nome):
-        if nome in self.clientes:
-            del self.clientes[nome]
-
-    def criar_grupo(self, conexao, mensagem):
-        nome_grupo = mensagem.split()[1]
-        with self.lock:
-            if nome_grupo not in self.grupos.keys():
-                self.grupos[nome_grupo] = {}
-                conexao.socket.send(f'Grupo "{nome_grupo}" criado!'.encode(FORMATO))
-            elif not nome_grupo:
-                conexao.socket.send("Não é possível criar um grupo com o nome vazio.".encode(FORMATO))
-            else:
-                conexao.socket.send("Erro, grupo já existente".encode(FORMATO))
-
+        conexao.send(lista_usuarios.encode(FORMATO))
+        
+        
+    def criar_grupo(self, arg, conexao):
+        if arg:
+            with self.lock:
+                if arg not in self.grupos:
+                    self.grupos[arg] = {}
+                    conexao.send(f'Grupo "{arg}" criado!'.encode(FORMATO))
+                else:
+                    conexao.send("Erro, grupo já existente".encode(FORMATO))
+        else:
+            conexao.send("Erro, nome do grupo não pode ser vazio.".encode(FORMATO))
+            
     def listar_grupos(self, conexao):
-        if not self.grupos:
-            conexao.socket.send('Erro, nenhum grupo cadastrado'.encode(FORMATO))
+        if self.grupos:
+            conexao.send(f'Grupos cadastrados: {", ".join(self.grupos.keys())}'.encode(FORMATO))
         else:
-            grupos_existentes = ", ".join(self.grupos.keys())
-            conexao.socket.send(f'Grupos cadastrados: {grupos_existentes}'.encode(FORMATO))
-
-    def entrar_grupo(self, conexao, mensagem, nome):
-        nome_grupo = mensagem.split()[1]
-        if nome_grupo not in self.grupos.keys():
-            conexao.socket.send('Erro, grupo não existe'.encode(FORMATO))
+            conexao.send("Erro, nenhum grupo cadastrado".encode(FORMATO))
+            
+    
+    def listar_usuarios_grupo(self, arg, conexao):
+        if arg and arg in self.grupos:
+            membros = ", ".join(self.grupos[arg].keys())
+            conexao.send(f'Membros do grupo {arg}: {membros}'.encode(FORMATO))
         else:
-            with multiprocessing.Manager().Lock():
-                self.grupos[nome_grupo][nome] = Cliente(nome, conexao)
-            print(self.grupos)
+            conexao.send("Erro, grupo não cadastrado".encode(FORMATO))
 
-            conexao.socket.send(f'Você entrou no grupo {nome_grupo}.'.encode(FORMATO))
-
-    def sair_grupo(self, conexao, mensagem, nome):
-        nome_grupo = mensagem.split()[1]
-        if nome_grupo not in self.grupos.keys():
-            conexao.socket.send('Erro, grupo não existe'.encode(FORMATO))
+    def entrar_grupo(self, arg, nome, conexao):
+        if arg and arg in self.grupos:
+            with self.lock:
+                self.grupos[arg][nome] = Cliente(nome, conexao)
+            conexao.send(f'Você entrou no grupo {arg}.'.encode(FORMATO))
         else:
-            self.grupos[nome_grupo].pop(nome, None)
-            print(self.grupos)
+            conexao.send("Erro, grupo não existe".encode(FORMATO))
+
+            
+    def sair_grupo(self, arg, nome, conexao):
+        if arg and arg in self.grupos and nome in self.grupos[arg]:
+            with self.lock:
+                self.grupos[arg].pop(nome, None)
+            conexao.send(f'Você saiu do grupo {arg}.'.encode(FORMATO))
+        else:
+            conexao.send("Erro, grupo não existe ou você não está nele.".encode(FORMATO))
 
     def verificar_novo_cliente(self, novo_cliente):
         for cliente in self.clientes.values():
             if cliente.nome == novo_cliente.nome and cliente.is_online:
                 return True
         return False
+    
+    def enviar_mensagens_pendentes(self, destinatario, mensagem):
+    
+        with self.lock:
+            if destinatario not in self.mensagens_pendentes:
+                self.mensagens_pendentes[destinatario] = []
+                self.mensagens_pendentes[destinatario].append(mensagem)
+                print(f"[MENSAGEM PENDENTE] Mensagem para {destinatario} armazenada.")
 
-    def processar_comando(self, comando, nome, cliente):
+
+    def processar_comando(self, comando, nome, conexao):
         if comando.startswith("-msg "):
             partes = comando.split(" ", 3)
-            if len(partes) != 4:
-                cliente.socket.send("[ERRO] Comando inválido. Formato correto: -msg U ou G NICK/GRUPO MENSAGEM".encode(FORMATO))
-                return
+            if len(partes) < 4:
+               conexao.send("[ERRO] Comando inválido. Formato correto: -msg U ou G NICK/GRUPO MENSAGEM".encode(FORMATO))
+               return
 
             tipo, destinatarios, mensagem = partes[1], partes[2], partes[3]
             destinatarios = destinatarios.strip("[]").split(",")
 
             if tipo == "U": 
                 for destinatario in destinatarios:
-                    destinatario = destinatario.strip()
+                    mensagem_formatada = self.formatar_mensagem(nome, "", mensagem)
                     if destinatario in self.clientes:
-                        mensagem_formatada = self.formatar_mensagem(nome, "", mensagem)
-                        self.enviar_mensagem(remetente=nome, destinatario=destinatario, mensagem=mensagem_formatada)
+                        self.enviar_mensagem(nome, destinatario, mensagem_formatada)
                     else:
-                        self.enviar_mensagens_pendentes(destinatario, mensagem)
+                        self.enviar_mensagens_pendentes(destinatario, mensagem_formatada)
 
-            elif tipo == "G":  # Envio para grupo
+            elif tipo == "G": 
                 if destinatarios[0] in self.grupos:
-                    grupo_nome = destinatarios[0]
-                    for membro in self.grupos[grupo_nome]:
-                        mensagem_formatada = self.formatar_mensagem(nome, grupo_nome, mensagem)
+                    for membro in self.grupos[destinatario[0]]:
+                        mensagem_formatada = self.formatar_mensagem(nome, destinatarios[0], mensagem)
+                        
                         if membro in self.clientes:
-                            self.enviar_mensagem(remetente=nome, destinatario=membro, mensagem=mensagem_formatada)
+                            self.enviar_mensagem(nome, membro, mensagem_formatada)
                         else:
                             self.enviar_mensagens_pendentes(membro, mensagem_formatada)
                 else:
-                    cliente.socket.send("[ERRO] Grupo não encontrado.".encode(FORMATO))
+                    conexao.send("[ERRO] Grupo não encontrado.".encode(FORMATO))
 
             else:
-                cliente.socket.send("[ERRO] Tipo inválido. Use 'U' para usuário ou 'G' para grupo.".encode(FORMATO))
+                conexao.send("[ERRO] Tipo inválido. Use 'U' para usuário ou 'G' para grupo.".encode(FORMATO))
+                
+                
+        partes = comando.split(" ", 1)
+        cmd = partes[0]
+        args = partes[1] if len(partes) > 1 else ""
+
+        if cmd == "-listarusuarios":
+            self.listar_usuarios(conexao)
+        elif cmd == "-criargrupo":
+            self.criar_grupo(conexao, args)
+        elif cmd == "-listargrupos":
+            self.listar_grupos(conexao)
+        elif cmd == "-listausrgrupo":
+            self.listar_usuarios_grupo(conexao, args)
+        elif cmd == "-entrargrupo":
+            self.entrar_grupo(conexao, nome, args)
+        elif cmd == "-sairgrupo":
+            self.sair_grupo(conexao, nome, args)
+        
 
     def tratar_cliente(self, conexao, endereco):
         try:
-            nome = conexao.recv(1024).decode(FORMATO)
-            novo_cliente = Cliente(nome, conexao)
-            if nome in self.clientes:
-                conexao.socket.send("[ERRO] Nome já em uso, escolha outro.".encode(FORMATO))
-                conexao.close()
-                return
-
-            print(f"[NOVA CONEXÃO] {nome} conectado de {endereco}")
-
             while True:
-                
-                try:
-                    mensagem = conexao.recv(1024).decode(FORMATO)
-
-                    if not mensagem:
-                        break
-                    print(f"[SERVIDOR] {nome} enviou uma mensagem para {conexao}:{mensagem}")
-
-                    with self.lock:
-                        self.mensagens_pendentes[endereco] = mensagem
-
-                    mensagem = mensagem.strip()
-
-                    if mensagem == "-listar":
-                        self.listar(conexao, nome)
-
-                    elif mensagem == "-sair":
-                        self.sair(nome)
-                        break
-
-                    elif mensagem.startswith("-"):
-                        comando = mensagem.split()[0]
-
-                        if comando == "-criargrupo":
-                            self.criar_grupo(conexao, mensagem)
-
-                        elif comando == "-listargrupos":
-                            self.listar_grupos(conexao)
-
-                        elif comando == "-entrargrupo":
-                            self.entrar_grupo(conexao, mensagem, nome)
-
-                        elif comando == "-sairgrupo":
-                            self.sair_grupo(conexao, mensagem, nome)
-
-                        else:
-                            self.processar_comando(mensagem, nome, novo_cliente)
-
-                except Exception as e:
-                    traceback.print_exc()
-                    print(f"[ERRO] {nome} desconectado inesperadamente: {e}")
+                nome = conexao.recv(1024).decode(FORMATO)
+                if nome in self.clientes:
+                    conexao.send("[ERRO] Nome já em uso, escolha outro: ".encode(FORMATO))
+                else:
+                    conexao.send("[SUCESSO] Você está conectado!".encode(FORMATO))
                     break
+            
+            self.clientes[nome] = conexao
+            print(f"[NOVA CONEXÃO] {nome} conectado do {endereco}")
+            
+            if nome in self.mensagens_pendentes:
+                for mensagem in self.mensagens_pendentes.pop(nome):
+                    conexao.send(mensagem.encode(FORMATO))
+                print(f"[SERVIDOR] Mensagens entregues para {nome}")
+            
+            while True:
+                comando = conexao.recv(1024).decode(FORMATO)
+                if comando == "-sair":
+                    print(f"[SERVIDOR] {nome} saiu do chat.")
+                    break
+                self.processar_comando(comando, nome, conexao)
 
+                
         except Exception as e:
-            traceback.print_exc()
-            print(f"[ERRO] {endereco} encontrou um erro: {e}")
-
-        conexao.close()
+            print(f"[ERRO] {nome} desconectado inesperadamente: {e}")
+        finally:
+            if nome in self.clientes:
+                self.clientes.pop(nome)
+            conexao.close()
 
     def iniciar_servidor(self):
         servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
