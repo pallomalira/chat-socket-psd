@@ -43,21 +43,22 @@ class Server:
                 print(f"[ERRO] Não foi possível enviar para {destinatario}")
                 self.clientes.pop(destinatario, None)
 
-    def listarusuarios(self, conexao, nome):
+    def listarusuarios(self, conexao):
         lista_usuarios = "Usuários conectados: " + ", ".join(self.clientes.keys())
         conexao.send(lista_usuarios.encode(FORMATO))
         
         
-    def criar_grupo(self, arg, conexao):
-        if arg:
+    def criar_grupo(self, conexao, nome, nome_grupo):
+        if nome_grupo:
             with self.lock:
-                if arg not in self.grupos:
-                    self.grupos[arg] = {}
-                    conexao.send(f'Grupo "{arg}" criado!'.encode(FORMATO))
+                if nome_grupo not in self.grupos:
+                   self.grupos[nome_grupo] = {nome: Cliente(nome, conexao)}
+                   conexao.send(f'Grupo "{nome_grupo}" criado e você foi adicionado!'.encode(FORMATO))
                 else:
-                    conexao.send("Erro, grupo já existente".encode(FORMATO))
+                   conexao.send("Erro, grupo já existente.".encode(FORMATO))
         else:
             conexao.send("Erro, nome do grupo não pode ser vazio.".encode(FORMATO))
+
             
     def listar_grupos(self, conexao):
         if self.grupos:
@@ -66,30 +67,45 @@ class Server:
             conexao.send("Erro, nenhum grupo cadastrado".encode(FORMATO))
             
     
-    def listar_usuarios_grupo(self, arg, conexao):
-        if arg and arg in self.grupos:
-            membros = ", ".join(self.grupos[arg].keys())
-            conexao.send(f'Membros do grupo {arg}: {membros}'.encode(FORMATO))
+    def listar_usuarios_grupo(self, conexao, args):
+        if args in self.grupos and isinstance(self.grupos[args], dict):
+            membros = list(self.grupos[args].keys())
+            if membros:
+                membros_gp = ", ".join(membros)
+                
+                conexao.send(f'Membros do grupo {args}: {membros_gp}'.encode(FORMATO))
+            else:
+                conexao.send(f'O grupo {args} está vazio.'.encode(FORMATO))
+                
         else:
             conexao.send("Erro, grupo não cadastrado".encode(FORMATO))
 
-    def entrar_grupo(self, arg, nome, conexao):
-        if arg and arg in self.grupos:
+    def entrar_grupo(self, conexao, nome, args):
+        if args in self.grupos:
             with self.lock:
-                self.grupos[arg][nome] = Cliente(nome, conexao)
-            conexao.send(f'Você entrou no grupo {arg}.'.encode(FORMATO))
+                if not isinstance(self.grupos[args], dict):
+                    self.grupos[args] = {}
+                self.grupos[args][nome] = nome
+                conexao.send(f'Você entrou no grupo {args}.'.encode(FORMATO))
         else:
             conexao.send("Erro, grupo não existe".encode(FORMATO))
 
             
-    def sair_grupo(self, arg, nome, conexao):
-        if arg and arg in self.grupos and nome in self.grupos[arg]:
+    def sair_grupo(self, conexao, nome, args):
+        if args in self.grupos and isinstance(self.grupos[args], dict):
             with self.lock:
-                self.grupos[arg].pop(nome, None)
-            conexao.send(f'Você saiu do grupo {arg}.'.encode(FORMATO))
+                if nome in self.grupos[args]:
+                    del self.grupos[args][nome]
+                    conexao.send(f'Você saiu do grupo {args}.'.encode(FORMATO))
+                
+                else:
+                    conexao.send("Erro, você não está nesse grupo.".encode(FORMATO))
+                   
         else:
-            conexao.send("Erro, grupo não existe ou você não está nele.".encode(FORMATO))
+            conexao.send("Erro, grupo não existe.".encode(FORMATO))
 
+                    
+            
     def verificar_novo_cliente(self, novo_cliente):
         for cliente in self.clientes.values():
             if cliente.nome == novo_cliente.nome and cliente.is_online:
@@ -144,17 +160,18 @@ class Server:
         args = partes[1] if len(partes) > 1 else ""
 
         if cmd == "-listarusuarios":
-            self.listar_usuarios(conexao)
+            self.listarusuarios(conexao)
         elif cmd == "-criargrupo":
-            self.criar_grupo(conexao, args)
+            self.criar_grupo(conexao, nome, args)
         elif cmd == "-listargrupos":
             self.listar_grupos(conexao)
         elif cmd == "-listausrgrupo":
-            self.listar_usuarios_grupo(conexao, args)
+            self.listar_usuarios_grupo(conexao,args)
         elif cmd == "-entrargrupo":
             self.entrar_grupo(conexao, nome, args)
         elif cmd == "-sairgrupo":
             self.sair_grupo(conexao, nome, args)
+
         
 
     def tratar_cliente(self, conexao, endereco):
