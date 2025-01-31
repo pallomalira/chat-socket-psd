@@ -1,4 +1,4 @@
-class User:
+class Cliente:
 
     def __init__(self, nome, socket):
         self.nome = nome

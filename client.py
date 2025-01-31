@@ -1,6 +1,5 @@
 import socket
 import threading
-import os 
 
 PORTA = 5050
 FORMATO = 'utf-8'
@@ -12,7 +11,7 @@ def receber_mensagens(cliente):
         try:
             mensagem = cliente.recv(1024).decode(FORMATO)
             if not mensagem:
-                os._exit(0) # então finalizo o processso (somente) desse cliente
+                break
             print(mensagem)
         except:
             print("[ERRO] Conexão perdida.")
@@ -26,17 +25,26 @@ def iniciar_cliente():
     nome = input("Digite seu nome: ")
     cliente.send(nome.encode(FORMATO))  
 
+    # Inicia uma thread para receber mensagens sem bloquear o envio de outras
     thread = threading.Thread(target=receber_mensagens, args=(cliente,))
+    thread.daemon = True  # Torna a thread de recebimento uma thread daemon
     thread.start()
 
     while True:
-        mensagem = input()
-        if mensagem.lower() == "/sair":
-            cliente.send("/sair".encode(FORMATO))
+        try:
+            mensagem = input()
+            if mensagem.lower() == "-sair":
+                cliente.send("-sair".encode(FORMATO))
+                print("[DESCONECTADO] Saindo do chat...")
+                cliente.close()
+                break
+            else:
+                cliente.send(mensagem.encode(FORMATO))
+        except KeyboardInterrupt:
+            cliente.send("-sair".encode(FORMATO))
             print("[DESCONECTADO] Saindo do chat...")
             cliente.close()
             break
-        cliente.send(mensagem.encode(FORMATO))
 
 if __name__ == "__main__":
     iniciar_cliente()
