@@ -13,20 +13,20 @@ def receber_mensagens(cliente):
             if not mensagem:
                 break
             print(mensagem)
-        except:
+        except Exception:
             print("[ERRO] Conexão perdida.")
             cliente.close()
             break
 
 def iniciar_cliente():
-    cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    cliente.connect(ENDERECO)
+    conexao = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    conexao.connect(ENDERECO)
 
     nome = input("Digite seu nome: ")
-    cliente.send(nome.encode(FORMATO))  
+    conexao.send(nome.encode(FORMATO))  
 
     # Inicia uma thread para receber mensagens sem bloquear o envio de outras
-    thread = threading.Thread(target=receber_mensagens, args=(cliente,))
+    thread = threading.Thread(target=receber_mensagens, args=(conexao,))
     thread.daemon = True  # Torna a thread de recebimento uma thread daemon
     thread.start()
 
@@ -34,16 +34,16 @@ def iniciar_cliente():
         try:
             mensagem = input()
             if mensagem.lower() == "-sair":
-                cliente.send("-sair".encode(FORMATO))
+                conexao.send("-sair".encode(FORMATO))
                 print("[DESCONECTADO] Saindo do chat...")
-                cliente.close()
+                conexao.close()
                 break
             else:
-                cliente.send(mensagem.encode(FORMATO))
+                conexao.send(mensagem.encode(FORMATO))
         except KeyboardInterrupt:
-            cliente.send("-sair".encode(FORMATO))
+            conexao.send("-sair".encode(FORMATO))
             print("[DESCONECTADO] Saindo do chat...")
-            cliente.close()
+            conexao.close()
             break
 
 if __name__ == "__main__":
