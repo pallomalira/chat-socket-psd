@@ -6,6 +6,7 @@ FORMATO = 'utf-8'
 SERVIDOR = "127.0.0.1"
 ENDERECO = (SERVIDOR, PORTA)
 
+
 def receber_mensagens(cliente):
     while True:
         try:
@@ -13,29 +14,40 @@ def receber_mensagens(cliente):
             if not mensagem:
                 break
             print(mensagem)
-        except:
+        except Exception:
             print("[ERRO] Conexão perdida.")
             cliente.close()
             break
 
+
 def iniciar_cliente():
-    cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    cliente.connect(ENDERECO)
+    conexao = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    conexao.connect(ENDERECO)
 
     nome = input("Digite seu nome: ")
-    cliente.send(nome.encode(FORMATO))  
+    conexao.send(nome.encode(FORMATO))
 
-    thread = threading.Thread(target=receber_mensagens, args=(cliente,))
+    # Inicia uma thread para receber mensagens sem bloquear o envio de outras
+    thread = threading.Thread(target=receber_mensagens, args=(conexao,))
+    thread.daemon = True  # Torna a thread de recebimento uma thread daemon
     thread.start()
 
     while True:
-        mensagem = input()
-        if mensagem.lower() == "/sair":
-            cliente.send("/sair".encode(FORMATO))
+        try:
+            mensagem = input()
+            if mensagem.lower() == "-sair":
+                conexao.send("-sair".encode(FORMATO))
+                print("[DESCONECTADO] Saindo do chat...")
+                conexao.close()
+                break
+            else:
+                conexao.send(mensagem.encode(FORMATO))
+        except KeyboardInterrupt:
+            conexao.send("-sair".encode(FORMATO))
             print("[DESCONECTADO] Saindo do chat...")
-            cliente.close()
+            conexao.close()
             break
-        cliente.send(mensagem.encode(FORMATO))
+
 
 if __name__ == "__main__":
     iniciar_cliente()
