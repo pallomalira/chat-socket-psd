@@ -67,6 +67,7 @@ class Server:
                     break
             if nome in self.clientes.keys():
                 self.clientes[nome].is_online = True
+                self.clientes[nome].conexao = conexao
             else:
                 self.clientes[nome] = Cliente(nome, conexao)
             print(f"[NOVA CONEXÃO] {nome} conectado do {endereco}")
@@ -199,8 +200,9 @@ class Server:
                 self.clientes[destinatario].conexao.send(mensagem.encode(FORMATO))
                 print(f"[SERVIDOR] {remetente} enviou mensagem para {destinatario}: {mensagem}")
         except Exception as e:
+            print(e)
             print(f"[ERRO] Não foi possível enviar para {destinatario}")
-            self.clientes.pop(destinatario, None)
+            # self.clientes.pop(destinatario, None)
 
     def formatar_mensagem(self, nick, grupo, mensagem):
             hora_atual = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")

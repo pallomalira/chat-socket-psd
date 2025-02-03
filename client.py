@@ -6,6 +6,7 @@ FORMATO = 'utf-8'
 SERVIDOR = "127.0.0.1"
 ENDERECO = (SERVIDOR, PORTA)
 
+
 def receber_mensagens(cliente):
     while True:
         try:
@@ -18,12 +19,13 @@ def receber_mensagens(cliente):
             cliente.close()
             break
 
+
 def iniciar_cliente():
     conexao = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     conexao.connect(ENDERECO)
 
     nome = input("Digite seu nome: ")
-    conexao.send(nome.encode(FORMATO))  
+    conexao.send(nome.encode(FORMATO))
 
     # Inicia uma thread para receber mensagens sem bloquear o envio de outras
     thread = threading.Thread(target=receber_mensagens, args=(conexao,))
@@ -45,6 +47,7 @@ def iniciar_cliente():
             print("[DESCONECTADO] Saindo do chat...")
             conexao.close()
             break
+
 
 if __name__ == "__main__":
     iniciar_cliente()
