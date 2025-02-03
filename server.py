@@ -14,7 +14,7 @@ FORMATO = 'utf-8'
 
 class Server:
 
-    clientes = {}
+    clientes = {} 
     grupos = {}
     mensagens_privadas_pendentes = {}
     mensagens_grupos_pendentes = {}
@@ -129,10 +129,51 @@ class Server:
                     else:
                             conexao.send("[ERRO] Você não está neste grupo.".encode(FORMATO))
                 except Exception as e:
-                    print(e)
-
+                    print(e) 
             else:
                 conexao.send("[ERRO] Tipo inválido. Use 'U' para usuário ou 'G' para grupo.".encode(FORMATO))
+                
+        elif comando.startswith("-msgt "):
+            partes = comando.split(" ", 2)
+            if len(partes) != 3:
+                conexao.send("[ERRO] Comando inválido. Formato correto: -msgt C ou D ou T MENSAGEM".encode(FORMATO))
+                return
+            tipo, mensagem = partes[1], partes[2]
+            
+            if tipo == "C":
+                clientes_copia = list(self.clientes.items())
+                
+                for cliente_nome, destinatario in clientes_copia:
+                    if destinatario.is_online:
+                        mensagem_formatada = self.formatar_mensagem(nome, "", mensagem)
+                        self.enviar_mensagem( nome, cliente_nome, mensagem_formatada)
+                        
+                    
+            elif tipo == "D":
+                usuarios_offline = [cliente_nome for cliente_nome, destinatario in self.clientes.items() if not destinatario.is_online]
+                if usuarios_offline:
+                    for cliente_nome in usuarios_offline:
+                        mensagem_formatada = self.formatar_mensagem(nome, "", mensagem)
+                        self.guardar_mensagens_privadas_pendentes( cliente_nome, mensagem_formatada) 
+                else:
+                    print(f"[INFO] Nenhum usuário está desconectado. Nenhuma mensagem foi armazenada.")
+                        
+  
+            elif tipo == "T":
+                usuarios_offline = [cliente_nome for cliente_nome, destinatario in self.clientes.items() if not destinatario.is_online]
+                mensagem_formatada = self.formatar_mensagem(nome, "", mensagem)
+                for cliente_nome, destinatario in self.clientes.items():
+                    if destinatario.is_online:
+                        self.enviar_mensagem(nome, cliente_nome, mensagem_formatada)
+                for cliente_nome in usuarios_offline:
+                    self.guardar_mensagens_privadas_pendentes(cliente_nome, mensagem_formatada)
+                if not usuarios_offline:
+                    print(f"[INFO] Nenhum usuário está desconectado. Nenhuma mensagem foi armazenada.")
+                    
+                    
+            else:
+                self.conexao.send("[ERRO] Tipo inválido. Use C para online, D para desconectados, T para todos.".encode(FORMATO))
+
                 
         else: 
             partes = comando.split(" ", 1)
